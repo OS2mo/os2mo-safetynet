@@ -1,11 +1,13 @@
 # SPDX-FileCopyrightText: Magenta ApS <https://magenta.dk>
 # SPDX-License-Identifier: MPL-2.0
 from enum import Enum
+from typing import Any
 from uuid import UUID
 
-from pydantic import AnyHttpUrl
+from fastramqpi.config import Settings as FastRAMQPISettings
 from pydantic import BaseModel
 from pydantic import BaseSettings
+from pydantic import Field
 from pydantic import SecretStr
 
 
@@ -20,12 +22,14 @@ class SafetyNetSFTP(BaseModel):
     username: str
     password: SecretStr
 
+    class Config:
+        env_nested_delimiter = "__"
+
 
 class SafetyNetSettings(BaseSettings):
-    auth_server: AnyHttpUrl
-    client_id: str
-    client_secret: SecretStr
-    mora_base: str
+    fastramqpi: FastRAMQPISettings = Field(
+        default_factory=FastRAMQPISettings, description="FastRAMQPI settings"
+    )
 
     safetynet_sftp: SafetyNetSFTP | None = None
 
@@ -42,5 +46,5 @@ class SafetyNetSettings(BaseSettings):
         env_nested_delimiter = "__"
 
 
-def get_settings(*args, **kwargs) -> SafetyNetSettings:
+def get_settings(*args: Any, **kwargs: Any) -> SafetyNetSettings:
     return SafetyNetSettings(*args, **kwargs)
