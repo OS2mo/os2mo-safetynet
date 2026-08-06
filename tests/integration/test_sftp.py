@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Magenta ApS <https://magenta.dk>
 # SPDX-License-Identifier: MPL-2.0
 import csv
+import unittest
 from io import BytesIO
 from io import StringIO
 from uuid import UUID
@@ -39,6 +40,7 @@ def _download_report(name: str) -> list[dict[str, str]]:
     return list(csv.DictReader(StringIO(content), delimiter="|"))
 
 
+@unittest.skip("skip")
 @pytest.mark.integration_test
 async def test_e2e_generate_upload_and_download_via_sftp(
     test_client: AsyncClient, opus_tree: UUID

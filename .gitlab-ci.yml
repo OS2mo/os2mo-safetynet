@@ -1,0 +1,102 @@
+# SPDX-FileCopyrightText: Magenta ApS <https://magenta.dk>
+# SPDX-License-Identifier: MPL-2.0
+stages:
+  - lint
+  - build
+  - test
+  - coverage
+  - release
+#  - deploy
+
+variables:
+  OS2MO_INIT_CONFIG: "/builds/$CI_PROJECT_PATH/dev-environment/init.config.yml"
+  IMAGE_SHA: ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHA}
+
+  RELEASE_REGISTRY: docker.io
+  RELEASE_REGISTRY_IMAGE: index.docker.io/magentaaps/os2mo-safetynet
+
+  PYTEST_COV_MODULE: safetynet
+  PYTEST_COV_FAIL_UNDER: 0
+
+  PRECOMMIT_USE_POETRY: "true"
+  POETRY_VERSION: "1.8.5"
+  PYTHON_VERSION: "3.12"
+
+  PRODUCT: os2mo
+  COMPONENT: sdtoolplus
+
+# Conditions
+#############
+.if-default-branch-refs: &if-default-branch-refs
+  if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+.if-tag: &if-tag
+  if: '$CI_COMMIT_TAG'
+
+.if-merge-request: &if-merge-request
+  if: '$CI_MERGE_REQUEST_IID'
+
+
+# Workflow
+###########
+workflow:
+  rules:
+    - <<: *if-tag
+    - <<: *if-default-branch-refs
+    - <<: *if-merge-request
+
+include:
+  - project: rammearkitektur/os2mo
+    file:
+      - gitlab-ci-templates/integration-test-meta.v1.yml
+  - project: labs/salt-automation
+    file:
+      - /gitlab-ci-templates/common/rules.v1.yml
+      - /gitlab-ci-templates/common/pre-commit.v1.yml
+      - /gitlab-ci-templates/common/conventional-commits.v1.yml
+      - /gitlab-ci-templates/python/pytest.v1.yml
+      - /gitlab-ci-templates/common/docker-build.v1.yml
+      - /gitlab-ci-templates/common/docker-release.v1.yml
+#      - /gitlab-ci-templates/common/config-updater-salt.v1.yml
+#      - /gitlab-ci-templates/common/config-updater-flux.v1.yml
+
+# Unit tests (everything not marked as an integration test)
+Test:
+  variables:
+    PYTEST_ADDOPTS: "-m 'not integration_test'"
+
+# Integration tests (require a running OS2mo stack, provided by the template)
+Integration-test:
+  extends:
+    - .integration-test:mo
+  variables:
+    PYTEST_ADDOPTS: "-m 'integration_test'"
+    SAFETYNET_ADM_UNIT_UUID: "12121212-1212-1212-1212-121212121212"
+    # The app is stateless; reuse MOs own Postgres (`mox-db`) for the FastRAMQPI
+    # integration-test fixtures instead of a dedicated database. The template
+    # defaults these to a `db:54321` that does not exist among its services.
+    FASTRAMQPI__DATABASE__USER: "mox"
+    FASTRAMQPI__DATABASE__PASSWORD: "mox"
+    FASTRAMQPI__DATABASE__HOST: "mox-db"
+    FASTRAMQPI__DATABASE__PORT: "5432"
+    FASTRAMQPI__DATABASE__NAME: "mox"
+    # SFTP target for the end-to-end upload/download test (the `sftp` service).
+    SAFETYNET_SFTP__HOSTNAME: "sftp"
+    SAFETYNET_SFTP__PORT: "2222"
+    SAFETYNET_SFTP__USERNAME: "safetynet"
+    SAFETYNET_SFTP__PASSWORD: "safetynet"
+  services:
+    - !reference [.integration-test:mo, services]
+    # Plain (non-chrooted) OpenSSH server; the login directory is writable so the
+    # app uploads with bare filenames, as against the real SafetyNet SFTP.
+    # Pinned by digest for reproducibility (version 10.3_p1-r0-ls233).
+    - name: lscr.io/linuxserver/openssh-server@sha256:96b9a4d3b5106746d08d43a6911650d4d21f7d5c7f2ac9660e792bdb5e63157c
+      alias: sftp
+      variables:
+        PUID: "1000"
+        PGID: "1000"
+        PASSWORD_ACCESS: "true"
+        USER_NAME: "safetynet"
+        USER_PASSWORD: "safetynet"
+  rules:
+    - <<: *if-merge-request
