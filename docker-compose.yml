@@ -30,13 +30,15 @@ services:
       # SOURCE_SYSTEM: "opus"  # or "sd"
       # INCLUDE_MANAGER_CPR: "false"
 
-      # SFTP upload target (optional; omit to allow skip-upload only)
-      # SAFETYNET_SFTP__HOSTNAME: "sftp"
-      # SAFETYNET_SFTP__PORT: "22"
-      # SAFETYNET_SFTP__USERNAME: "safetynet"
-      # SAFETYNET_SFTP__PASSWORD: "safetynet"
+      # SFTP upload target (the `sftp` service below; used by the e2e test).
+      SAFETYNET_SFTP__HOSTNAME: "sftp"
+      SAFETYNET_SFTP__PORT: "2222"
+      SAFETYNET_SFTP__USERNAME: "safetynet"
+      SAFETYNET_SFTP__PASSWORD: "safetynet"
     ports:
       - "8000:8000"
+    depends_on:
+      - sftp
     volumes:
       - ./safetynet:/app/safetynet:ro
       - ./tests:/app/tests:ro

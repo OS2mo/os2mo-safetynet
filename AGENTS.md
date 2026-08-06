@@ -130,8 +130,15 @@ is `auto`. Prefer integration tests over unit tests, and avoid mocks.
   - `test_trigger.py` has a dedicated tree for each source system: OPUS (manager
     engagement number taken verbatim from the OU manager's user_key) and SD
     (`XY-` InstitutionIdentifier prefix stripped, manager resolved via
-    `engagement_response`). A `@pytest.mark.source_system("opus"|"sd")` marker
-    tells the `app` fixture which `SOURCE_SYSTEM` to build the app with.
+    `engagement_response`). Per-test settings are injected with the FastRAMQPI
+    `@pytest.mark.envvar({...})` marker (e.g. `SOURCE_SYSTEM`, `INCLUDE_MANAGER_CPR`);
+    the `app` fixture just calls `create_app()`.
+  - `test_sftp.py` is a full end-to-end test: it triggers a real run (no
+    `skip_upload`), which uploads the reports to the `sftp` service in
+    `docker-compose.yml`, then downloads and verifies one report. The `sftp`
+    service is a plain (non-chrooted) OpenSSH server so the login directory is
+    writable and the app uploads with bare filenames, as against the real
+    SafetyNet SFTP.
 - The FastRAMQPI integration fixtures require a broker and a database even though
   the app is stateless. Rather than run our own, the `safetynet` service in
   `docker-compose.yml` reuses the OS2mo stack's backing services (as the
