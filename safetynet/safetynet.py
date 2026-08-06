@@ -16,9 +16,11 @@
 # exact generated class/field names are produced by `ariadne-codegen` and may
 # need minor fixups the first time the client is generated against a real MO
 # schema.
+import csv
 import datetime
 from contextlib import contextmanager
 from io import BytesIO
+from io import StringIO
 from typing import Iterator
 from uuid import UUID
 
@@ -107,11 +109,6 @@ class MedOuRow(BaseModel):
 def _format_date(value: datetime.datetime | None) -> str:
     """
     Format a MO validity datetime as a `YYYY-MM-DD` string (empty for None).
-
-    The DateTime scalar is parsed to a timezone-aware `datetime` by the
-    generated client (`fastramqpi.ariadne.parse_graphql_datetime`); we format it
-    in its own timezone to reproduce the previous behaviour of slicing the first
-    10 chars off MOs ISO 8601 date strings.
     """
     if value is None:
         return ""
@@ -465,93 +462,139 @@ async def process_med_unit(
     return med_ass_rows, med_ou_rows
 
 
+def _serialize_csv(fieldnames: list[str], rows: list[dict[str, str]]) -> list[str]:
+    """
+    Serialize rows to the SafetyNet CSV format (``||``-delimited lines).
+
+    Python's :mod:`csv` only supports single-character delimiters, so we write
+    with ``|`` via :class:`csv.DictWriter` and expand it to the SafetyNet ``||``
+    delimiter afterwards. This relies on field values never containing a ``|``
+    (true for CPR numbers, UUIDs, dates, names and user keys).
+    """
+    buffer = StringIO()
+    writer = csv.DictWriter(
+        buffer,
+        fieldnames=fieldnames,
+        delimiter="|",
+        quoting=csv.QUOTE_NONE,
+        escapechar="\\",
+        lineterminator="\n",
+    )
+    writer.writeheader()
+    writer.writerows(rows)
+    return buffer.getvalue().replace("|", "||").splitlines(keepends=True)
+
+
 def adm_eng_rows_to_csv_lines(
     rows: list[AdmEngRow], include_manager_cpr: bool
 ) -> list[str]:
     """
     Convert ADM engagement data models to CSV
     """
-    return [
-        f"Medarbejdernummer||"
-        f"CPR||"
-        f"Fornavn||"
-        f"Efternavn||"
-        f"Mail||"
-        f"Afdelingskode||"
-        f"Startdato||"
-        f"Slutdato||"
-        f"LedersMedarbejdernummer||"
-        f"{'LedersCPR||' if include_manager_cpr else ''}"
-        f"Brugernavn||"
-        f"Titel||"
-        f"Faggruppe\n"
-    ] + [
-        (
-            f"{r.person_user_key}||"
-            f"{r.cpr}||"
-            f"{r.first_name}||"
-            f"{r.last_name}||"
-            f"{r.email}||"
-            f"{str(r.org_unit)}||"
-            f"{r.eng_start}||"
-            f"{r.eng_end}||"
-            f"{r.manager_eng_user_key}||"
-            f"{r.manager_cpr + '||' if include_manager_cpr else ''}"
-            f"{r.username}||"
-            f"{r.job_function}||"
-            f"{r.job_function}\n"
-        )
-        for r in rows
+    fieldnames = [
+        "Medarbejdernummer",
+        "CPR",
+        "Fornavn",
+        "Efternavn",
+        "Mail",
+        "Afdelingskode",
+        "Startdato",
+        "Slutdato",
+        "LedersMedarbejdernummer",
     ]
+    if include_manager_cpr:
+        fieldnames.append("LedersCPR")
+    fieldnames += ["Brugernavn", "Titel", "Faggruppe"]
+
+    csv_rows: list[dict[str, str]] = []
+    for r in rows:
+        csv_row = {
+            "Medarbejdernummer": r.person_user_key,
+            "CPR": r.cpr,
+            "Fornavn": r.first_name,
+            "Efternavn": r.last_name,
+            "Mail": r.email,
+            "Afdelingskode": str(r.org_unit),
+            "Startdato": r.eng_start,
+            "Slutdato": r.eng_end,
+            "LedersMedarbejdernummer": r.manager_eng_user_key,
+            "Brugernavn": r.username,
+            "Titel": r.job_function,
+            "Faggruppe": r.job_function,
+        }
+        if include_manager_cpr:
+            csv_row["LedersCPR"] = r.manager_cpr
+        csv_rows.append(csv_row)
+
+    return _serialize_csv(fieldnames, csv_rows)
 
 
 def med_ass_rows_to_csv_lines(rows: list[MedAssRow]) -> list[str]:
     """
     Convert MED association data models to CSV
     """
-    return ["CPR||Afdelingskode||Startdato||Slutdato||Hverv||Hovedorganisation\n"] + [
-        (
-            f"{r.cpr}||"
-            f"{str(r.org_unit)}||"
-            f"{r.ass_start}||"
-            f"{r.ass_end}||"
-            f"{r.role}||"
-            f"{r.main_org}\n"
-        )
+    fieldnames = [
+        "CPR",
+        "Afdelingskode",
+        "Startdato",
+        "Slutdato",
+        "Hverv",
+        "Hovedorganisation",
+    ]
+    csv_rows = [
+        {
+            "CPR": r.cpr,
+            "Afdelingskode": str(r.org_unit),
+            "Startdato": r.ass_start,
+            "Slutdato": r.ass_end,
+            "Hverv": r.role,
+            "Hovedorganisation": r.main_org,
+        }
         for r in rows
     ]
+    return _serialize_csv(fieldnames, csv_rows)
 
 
 def adm_ou_rows_to_csv_lines(rows: list[AdmOuRow]) -> list[str]:
     """
     Convert ADM org unit data models to CSV
     """
-    return [
-        "Afdelingsnavn||"
-        "Afdelingskode||"
-        "Forældreafdelingskode||"
-        "Pnummer||"
-        "Arbejdsmiljøorganisationkode\n"
-    ] + [
-        (
-            f"{r.name}||"
-            f"{str(r.uuid)}||"
-            f"{str(r.parent) if r.parent is not None else ''}||"
-            f"{r.pnumber}||"
-            f"{','.join(str(related_unit) for related_unit in r.related_units)}\n"
-        )
+    fieldnames = [
+        "Afdelingsnavn",
+        "Afdelingskode",
+        "Forældreafdelingskode",
+        "Pnummer",
+        "Arbejdsmiljøorganisationkode",
+    ]
+    csv_rows = [
+        {
+            "Afdelingsnavn": r.name,
+            "Afdelingskode": str(r.uuid),
+            "Forældreafdelingskode": str(r.parent) if r.parent is not None else "",
+            "Pnummer": r.pnumber,
+            "Arbejdsmiljøorganisationkode": ",".join(
+                str(related_unit) for related_unit in r.related_units
+            ),
+        }
         for r in rows
     ]
+    return _serialize_csv(fieldnames, csv_rows)
 
 
 def med_ou_rows_to_csv_lines(rows: list[MedOuRow]) -> list[str]:
     """
     Convert MED org unit data models to CSV
     """
-    return ["Afdelingsnavn||Afdelingskode||Forældreafdelingskode\n"] + [
-        (f"{r.name}||{str(r.uuid)}||{str(r.parent) if r.parent is not None else ''}\n")
+    fieldnames = ["Afdelingsnavn", "Afdelingskode", "Forældreafdelingskode"]
+    csv_rows = [
+        {
+            "Afdelingsnavn": r.name,
+            "Afdelingskode": str(r.uuid),
+            "Forældreafdelingskode": str(r.parent) if r.parent is not None else "",
+        }
         for r in rows
     ]
+    return _serialize_csv(fieldnames, csv_rows)
 
 
 def write_csv(path: str, lines: list[str]) -> None:
