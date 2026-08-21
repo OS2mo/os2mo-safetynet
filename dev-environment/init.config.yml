@@ -1,0 +1,146 @@
+# SPDX-FileCopyrightText: Magenta ApS <https://magenta.dk>
+# SPDX-License-Identifier: MPL-2.0
+root_organisation:
+  municipality_code: null
+
+facets:
+  association_type:
+    SD-medarbejder:
+      title: "SD-medarbejder"
+      scope: "TEXT"
+  org_unit_type:
+    Enhed:
+      title: "Enhed"
+      scope: "TEXT"
+  org_unit_level:
+    Afdelings-niveau:
+      title: "Afdelings-niveau"
+      scope: "TEXT"
+    NY0-niveau:
+      title: "NY0-niveau"
+      scope: "TEXT"
+    NY1-niveau:
+      title: "NY1-niveau"
+      scope: "TEXT"
+    NY2-niveau:
+      title: "NY2-niveau"
+      scope: "TEXT"
+    NY3-niveau:
+      title: "NY3-niveau"
+      scope: "TEXT"
+    NY4-niveau:
+      title: "NY4-niveau"
+      scope: "TEXT"
+    non-SD:
+      title: "non-SD"
+      scope: "TEXT"
+    TOP:
+      title: "TOP"
+      scope: "TEXT"
+  org_unit_hierarchy:
+    linjeorg:
+      title: "Linjeorganisation"
+      scope: "TEXT"
+  visibility:
+    Intern:
+      title: "Må vises internt"
+      scope: "INTERNAL"
+    Public:
+      title: "Må vises eksternt"
+      scope: "PUBLIC"
+  org_unit_address_type:
+    Pnummer:
+      title: "P-nummer"
+      scope: "PNUMBER"
+    AddressMailUnit:
+      title: "Postadresse"
+      scope: "DAR"
+    AdresseSDOrgUnit:
+      title: "Postadresse fra SD"
+      scope: "TEXT"
+    lokation_telefon_lokal:
+      title: "Telefon lokal"
+      scope: "PHONE"
+  employee_address_type:
+    person_email:
+      title: "Privat e-mail"
+      scope: "EMAIL"
+    person_telefon:
+      title: "Privat telefon"
+      scope: "PHONE"
+    person_telefon_anden:
+      title: "Privat telefon (sekundær)"
+      scope: "PHONE"
+    engagement_email:
+      title: "E-mail"
+      scope: "EMAIL"
+    engagement_telefon:
+      title: "Telefon"
+      scope: "PHONE"
+    engagement_telefon_anden:
+      title: "Telefon (sekundær)"
+      scope: "PHONE"
+    AdresseSDEmployee:
+      title: "Postadresse fra SD"
+      scope: "TEXT"
+  engagement_type:
+    TestAnsat:
+      title: "TestAnsat"
+      scope: "TEXT"
+    fuldtid:
+      title: "Månedslønnet, fuldtid"
+      scope: "TEXT"
+    deltid:
+      title: "Månedslønnet, deltid"
+      scope: "TEXT"
+    timelønnet:
+      title: "Timelønnet"
+      scope: "TEXT"
+    status0:
+      title: "Ikke i løn"
+      scope: "TEXT"
+    status1:
+      title: "I løn"
+      scope: "TEXT"
+    status3:
+      title: "Orlov"
+      scope: "TEXT"
+    status4:
+      # According to SD this should really be "Ansat i konflikt"
+      title: "Statuskode 4"
+      scope: "TEXT"
+    nonSD:
+      title: "Non-SD"
+      scope: "TEXT"
+  engagement_job_function:
+    Ninja:
+      title: "Ninja"
+      scope: "0"
+    1234:
+      title: "Kung Fu Master"
+      scope: "0"
+    5678:
+      title: "Shogun"
+      scope: "0"
+    9000:
+      title: "Karate Coach"
+      scope: "0"
+    unknown:
+      title: "Ukendt"
+      scope: "0"
+  leave_type:
+    Orlov:
+      title: "Orlov"
+      scope: "TEXT"
+  manager_level:
+    afdelingsleder:
+      title: "Afdelingsleder"
+      scope: "TEXT"
+  manager_type:
+    leder:
+      title: "Leder"
+      scope: "TEXT"
+  responsibility:
+    personale:
+      title: "Personale"
+      scope: "TEXT"

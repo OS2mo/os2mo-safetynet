@@ -1,0 +1,83 @@
+# SPDX-FileCopyrightText: Magenta ApS <https://magenta.dk>
+# SPDX-License-Identifier: MPL-2.0
+services:
+  safetynet:
+    build: .
+    command: ["./docker/start.sh"]
+    environment:
+      ENVIRONMENT: "development"
+
+      # Connection to OS2mo (handled by FastRAMQPI)
+      FASTRAMQPI__CLIENT_ID: "dipex"
+      FASTRAMQPI__CLIENT_SECRET: "603f1c82-d012-4d04-9382-dbe659c533fb"
+      FASTRAMQPI__MO_URL: "http://mo:5000"
+      FASTRAMQPI__AUTH_SERVER: "http://keycloak:8080/auth"
+      FASTRAMQPI__AUTH_REALM: "mo"
+      # The app is stateless, but the FastRAMQPI integration-test fixtures require
+      # a broker and a database. Reuse the OS2mo stack's own backing services (see
+      # os2mo gitlab-ci-templates/integration-test-meta.v1.yml): the `msg-broker`
+      # RabbitMQ and the `mox-db` Postgres. The `mox` role is a superuser, which
+      # the fixtures need to create/drop their per-test template databases.
+      FASTRAMQPI__AMQP__URL: "amqp://guest:guest@msg-broker:5672/"
+      FASTRAMQPI__DATABASE__USER: "mox"
+      FASTRAMQPI__DATABASE__PASSWORD: "mox"
+      FASTRAMQPI__DATABASE__HOST: "mox-db"
+      FASTRAMQPI__DATABASE__NAME: "mox"
+
+      # SafetyNet application settings
+      SAFETYNET_ADM_UNIT_UUID: "23a2ace2-52ca-458d-bead-d1a42080579f"
+      # SAFETYNET_MED_UNIT_UUID: "..."
+      # SOURCE_SYSTEM: "opus"  # or "sd"
+      # INCLUDE_MANAGER_CPR: "false"
+
+      # SFTP upload target (the `sftp` service below; used by the e2e test).
+      SAFETYNET_SFTP__HOSTNAME: "sftp"
+      SAFETYNET_SFTP__PORT: "2222"
+      SAFETYNET_SFTP__USERNAME: "safetynet"
+      SAFETYNET_SFTP__PASSWORD: "safetynet"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - sftp
+    volumes:
+      - ./safetynet:/app/safetynet:ro
+      - ./tests:/app/tests:ro
+    networks:
+      # Reach a separately-run OS2mo stack (see https://github.com/OS2mo). This
+      # also provides the `mox-db` Postgres and `msg-broker` used by the tests.
+      - os2mo_default
+
+  # A real SFTP server for the end-to-end upload/download test. Uses a plain
+  # (non-chrooted) OpenSSH server so the login directory is writable and the app
+  # can upload with bare filenames, exactly as against the real SafetyNet SFTP.
+  sftp:
+    # Pinned by digest for reproducibility (version 10.3_p1-r0-ls233).
+    image: lscr.io/linuxserver/openssh-server@sha256:96b9a4d3b5106746d08d43a6911650d4d21f7d5c7f2ac9660e792bdb5e63157c
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      PASSWORD_ACCESS: "true"
+      USER_NAME: "safetynet"
+      USER_PASSWORD: "safetynet"
+    networks:
+      - os2mo_default
+
+  mo-init:
+    image: magentaaps/os2mo-init:5.2.1
+    environment:
+      MO_URL: "http://mo:5000"
+      CLIENT_ID: "dipex"
+      CLIENT_SECRET: "603f1c82-d012-4d04-9382-dbe659c533fb"
+      AUTH_SERVER: "http://keycloak:8080/auth"
+      AUTH_REALM: "mo"
+    networks:
+      - os2mo_default
+    volumes:
+      - type: bind
+        source: ./dev-environment/init.config.yml
+        target: /config/config.yml
+        read_only: true
+
+networks:
+  os2mo_default:
+    external: true

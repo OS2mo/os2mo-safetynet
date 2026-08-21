@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: Magenta ApS <https://magenta.dk>
+# SPDX-License-Identifier: MPL-2.0
+.coverage
+*/.coverage
+**/__pycache__
+**/.cache/
+**/.pytest_cache/
+**/.mypy_cache/
+
+# IDEs
+.idea

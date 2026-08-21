@@ -1,93 +1,113 @@
 # os2mo-safetynet
 
-Application for generating SafetyNet reports
+A [FastRAMQPI](https://github.com/OS2mo/fastramqpi) integration that generates
+**SafetyNet** reports from [OS2mo](https://github.com/OS2mo) and delivers them
+over SFTP.
 
-## Getting started
+## What it does
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+On trigger, the integration reads organisation data from OS2mo (over GraphQL)
+and produces four CSV reports:
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+1. **ADM engagements** — every engagement in the administrative (ADM)
+   organisation tree, with the employee's manager engagement number.
+2. **ADM org units** — the org-unit structure of the ADM organisation.
+3. **MED associations** — associations in the works-council (MED) organisation.
+4. **MED org units** — the org-unit structure of the MED organisation.
 
-## Add your files
+The reports are `||`-delimited CSV files with Danish column headers, matching the
+format expected by SafetyNet. Unless upload is skipped, they are uploaded to the
+SafetyNet SFTP server.
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+### Source systems (OPUS vs SD)
+
+How an employee's manager engagement number is resolved depends on the source
+system feeding OS2mo, selected with `SOURCE_SYSTEM`:
+
+- **OPUS** — the org unit's manager user_key is used directly. If the unit's
+  manager is the employee themselves, the parent unit's manager is used instead.
+- **SD** — the manager engagement is resolved via the manager role's linked
+  engagement, falling back to matching the allowed SD engagement types. SD
+  user_keys carry an `InstitutionIdentifier` prefix (e.g. `XY-12345`) that is
+  stripped in the reports.
+
+## Running it
+
+The reports are triggered over HTTP:
 
 ```
-cd existing_repo
-git remote add origin https://git.magenta.dk/rammearkitektur/os2mo-safetynet.git
-git branch -M master
-git push -uf origin master
+POST /trigger
 ```
 
-## Integrate with your tools
+Query parameters:
 
-* [Set up project integrations](https://git.magenta.dk/rammearkitektur/os2mo-safetynet/-/settings/integrations)
+- `adm_unit_uuid` — root of the ADM org tree (defaults to `SAFETYNET_ADM_UNIT_UUID`).
+- `med_unit_uuid` — root of the MED org tree (defaults to `SAFETYNET_MED_UNIT_UUID`).
+- `skip_upload` — write CSVs to `/tmp/*.csv` instead of uploading via SFTP.
+- `only_adm_org` — only generate the two ADM reports.
 
-## Collaborate with your team
+### Local development
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+Requires a separately-running OS2mo stack (see https://github.com/OS2mo). Start
+the dev stack and trigger a run without uploading:
 
-## Test and Deploy
+```bash
+docker compose up --build --detach
+curl -X POST 'http://localhost:8000/trigger?skip_upload=true&only_adm_org=true'
+```
 
-Use the built-in continuous integration in GitLab.
+## Configuration
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+Configured via environment variables. The OS2mo connection is handled by
+FastRAMQPI and nested under `FASTRAMQPI__` (delimiter `__`):
 
-***
+| Variable | Description |
+| --- | --- |
+| `FASTRAMQPI__CLIENT_ID` / `FASTRAMQPI__CLIENT_SECRET` | Keycloak client credentials |
+| `FASTRAMQPI__MO_URL` | OS2mo base URL |
+| `FASTRAMQPI__AUTH_SERVER` / `FASTRAMQPI__AUTH_REALM` | Keycloak server and realm |
 
-# Editing this README
+Application settings are top-level:
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+| Variable | Description |
+| --- | --- |
+| `SAFETYNET_ADM_UNIT_UUID` | Root org unit of the ADM organisation |
+| `SAFETYNET_MED_UNIT_UUID` | Root org unit of the MED organisation |
+| `SOURCE_SYSTEM` | `opus` (default) or `sd` |
+| `INCLUDE_MANAGER_CPR` | Add the `LedersCPR` column to the ADM engagement report |
+| `ALLOWED_SD_ENGAGEMENT_TYPES` | SD engagement type user_keys used for manager resolution |
+| `SAFETYNET_SFTP__HOSTNAME` / `__PORT` / `__USERNAME` / `__PASSWORD` | SFTP upload target |
 
-## Suggestions for a good README
+## GraphQL client
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+The OS2mo GraphQL client in `safetynet/autogenerated_graphql_client/` is generated
+by [`ariadne-codegen`](https://github.com/mirumee/ariadne-codegen) from the named
+operations in `queries.graphql` and the MO schema in `schema.graphql`. It is
+generated code and must not be edited by hand — regenerate it with
+`ariadne-codegen client` when either file changes.
 
-## Name
-Choose a self-explaining name for your project.
+## Development
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+Poetry-managed, Python 3.12.
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```bash
+poetry install
+poetry run pre-commit run --all-files   # ruff, mypy, deptry, reuse, commitizen
+```
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+Tests are split into unit tests (`tests/`) and integration tests
+(`tests/integration/`, marked `integration_test`, run against a live OS2mo stack).
+Run them via the dev stack:
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+```bash
+docker compose run --rm safetynet pytest -m 'not integration_test'
+docker compose run --rm safetynet pytest -m 'integration_test' tests/integration/test_trigger.py
+```
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+[AGENTS.md](AGENTS.md) holds working notes for AI agents.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+## Licence
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Mozilla Public License 2.0 (MPL-2.0), Magenta ApS. The project is
+[REUSE](https://reuse.software/) compliant.
+</content>

@@ -1,0 +1,305 @@
+# SPDX-FileCopyrightText: Magenta ApS <https://magenta.dk>
+# SPDX-License-Identifier: MPL-2.0
+query GetAdmUnit($org_unit: [UUID!]) {
+  org_units(filter: { uuids: $org_unit }) {
+    objects {
+      current {
+        name
+        uuid
+        engagements {
+          uuid
+        }
+        parent {
+          uuid
+        }
+        children {
+          uuid
+        }
+        managers(inherit: true) {
+          user_key
+          person {
+            cpr_number
+            engagements {
+              user_key
+              org_unit_uuid
+              engagement_type {
+                user_key
+              }
+            }
+          }
+          engagement_response {
+            uuid
+            current {
+              user_key
+            }
+          }
+        }
+        addresses(filter: { address_type_user_keys: "Pnummer" }) {
+          value
+        }
+        related_units {
+          org_units {
+            uuid
+          }
+        }
+        ancestors {
+          uuid
+        }
+      }
+    }
+  }
+}
+
+query GetEngagement($uuid: [UUID!]) {
+  engagements(filter: { uuids: $uuid, from_date: null, to_date: null }) {
+    objects {
+      validities {
+        validity {
+          from
+          to
+        }
+      }
+      current {
+        user_key
+        person {
+          cpr_number
+          given_name
+          surname
+          addresses(filter: { address_type_user_keys: "AD-Email" }) {
+            value
+          }
+        }
+        job_function {
+          name
+        }
+        managers(exclude_self: true, inherit: true) {
+          person {
+            cpr_number
+            engagements {
+              user_key
+              engagement_type {
+                user_key
+              }
+            }
+          }
+          engagement_response {
+            uuid
+            current {
+              user_key
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+query GetMedUnit($org_unit: [UUID!]) {
+  org_units(filter: { uuids: $org_unit }) {
+    objects {
+      current {
+        name
+        uuid
+        associations {
+          uuid
+        }
+        parent {
+          uuid
+        }
+        children {
+          uuid
+        }
+      }
+    }
+  }
+}
+
+query GetAssociation($uuid: [UUID!]) {
+  associations(filter: { uuids: $uuid, from_date: null, to_date: null }) {
+    objects {
+      validities {
+        validity {
+          from
+          to
+        }
+      }
+      current {
+        association_type {
+          name
+          user_key
+          uuid
+        }
+        dynamic_class {
+          full_name
+          name
+          user_key
+          uuid
+        }
+        person {
+          cpr_number
+        }
+      }
+    }
+  }
+}
+
+query GetParentManager($org_unit: [UUID!]) {
+  org_units(filter: { uuids: $org_unit }) {
+    objects {
+      current {
+        parent {
+          managers(inherit: true) {
+            user_key
+            person {
+              cpr_number
+              engagements {
+                user_key
+                org_unit_uuid
+                engagement_type {
+                  user_key
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# --------------------------------------------------------------------------
+# Test-only operations for seeding MO in integration tests. These wrap the
+# real MO create mutations; they are only used from tests/integration.
+# --------------------------------------------------------------------------
+
+mutation _Testing_CreateOrg {
+  org_create(input: { municipality_code: null }) {
+    uuid
+  }
+}
+
+mutation _Testing_CreateFacet($user_key: String!, $from_date: DateTime!) {
+  facet_create(input: { user_key: $user_key, validity: { from: $from_date } }) {
+    uuid
+  }
+}
+
+mutation _Testing_CreateClass(
+  $user_key: String!
+  $name: String!
+  $facet_uuid: UUID!
+  $from_date: DateTime!
+) {
+  class_create(
+    input: {
+      user_key: $user_key
+      name: $name
+      facet_uuid: $facet_uuid
+      validity: { from: $from_date }
+    }
+  ) {
+    uuid
+  }
+}
+
+mutation _Testing_CreateEmployee(
+  $given_name: String!
+  $surname: String!
+  $cpr_number: CPR!
+) {
+  employee_create(
+    input: { given_name: $given_name, surname: $surname, cpr_number: $cpr_number }
+  ) {
+    uuid
+  }
+}
+
+mutation _Testing_CreateOrgUnit(
+  $name: String!
+  $user_key: String!
+  $org_unit_type: UUID!
+  $from_date: DateTime!
+  $parent: UUID
+) {
+  org_unit_create(
+    input: {
+      name: $name
+      user_key: $user_key
+      org_unit_type: $org_unit_type
+      parent: $parent
+      validity: { from: $from_date }
+    }
+  ) {
+    uuid
+  }
+}
+
+mutation _Testing_CreateEngagement(
+  $user_key: String!
+  $person: UUID!
+  $org_unit: UUID!
+  $engagement_type: UUID!
+  $job_function: UUID!
+  $from_date: DateTime!
+) {
+  engagement_create(
+    input: {
+      user_key: $user_key
+      person: $person
+      org_unit: $org_unit
+      engagement_type: $engagement_type
+      job_function: $job_function
+      validity: { from: $from_date }
+    }
+  ) {
+    uuid
+  }
+}
+
+mutation _Testing_CreateManager(
+  $user_key: String!
+  $person: UUID!
+  $org_unit: UUID!
+  $manager_type: UUID!
+  $manager_level: UUID!
+  $responsibility: [UUID!]!
+  $from_date: DateTime!
+  $engagement: UUID
+) {
+  manager_create(
+    input: {
+      user_key: $user_key
+      person: $person
+      org_unit: $org_unit
+      manager_type: $manager_type
+      manager_level: $manager_level
+      responsibility: $responsibility
+      engagement: $engagement
+      validity: { from: $from_date }
+    }
+  ) {
+    uuid
+  }
+}
+
+mutation _Testing_CreateAssociation(
+  $user_key: String!
+  $person: UUID!
+  $org_unit: UUID!
+  $association_type: UUID!
+  $from_date: DateTime!
+  $trade_union: UUID
+) {
+  association_create(
+    input: {
+      user_key: $user_key
+      person: $person
+      org_unit: $org_unit
+      association_type: $association_type
+      trade_union: $trade_union
+      validity: { from: $from_date }
+    }
+  ) {
+    uuid
+  }
+}
