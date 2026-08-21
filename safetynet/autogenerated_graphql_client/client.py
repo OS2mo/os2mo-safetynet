@@ -3,6 +3,10 @@ from typing import List, Optional, Union
 from uuid import UUID
 
 from ..types import CPRNumber
+from ._testing__create_association import (
+    TestingCreateAssociation,
+    TestingCreateAssociationAssociationCreate,
+)
 from ._testing__create_class import TestingCreateClass, TestingCreateClassClassCreate
 from ._testing__create_employee import (
     TestingCreateEmployee,
@@ -411,3 +415,33 @@ class GraphQLClient(AsyncBaseClient):
         response = await self.execute(query=query, variables=variables)
         data = self.get_data(response)
         return TestingCreateManager.parse_obj(data).manager_create
+
+    async def _testing__create_association(
+        self,
+        user_key: str,
+        person: UUID,
+        org_unit: UUID,
+        association_type: UUID,
+        from_date: datetime,
+        trade_union: Union[Optional[UUID], UnsetType] = UNSET,
+    ) -> TestingCreateAssociationAssociationCreate:
+        query = gql("""
+            mutation _Testing_CreateAssociation($user_key: String!, $person: UUID!, $org_unit: UUID!, $association_type: UUID!, $from_date: DateTime!, $trade_union: UUID) {
+              association_create(
+                input: {user_key: $user_key, person: $person, org_unit: $org_unit, association_type: $association_type, trade_union: $trade_union, validity: {from: $from_date}}
+              ) {
+                uuid
+              }
+            }
+            """)
+        variables: dict[str, object] = {
+            "user_key": user_key,
+            "person": person,
+            "org_unit": org_unit,
+            "association_type": association_type,
+            "from_date": from_date,
+            "trade_union": trade_union,
+        }
+        response = await self.execute(query=query, variables=variables)
+        data = self.get_data(response)
+        return TestingCreateAssociation.parse_obj(data).association_create

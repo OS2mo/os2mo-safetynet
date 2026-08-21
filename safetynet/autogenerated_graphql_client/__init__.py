@@ -1,3 +1,7 @@
+from ._testing__create_association import (
+    TestingCreateAssociation,
+    TestingCreateAssociationAssociationCreate,
+)
 from ._testing__create_class import TestingCreateClass, TestingCreateClassClassCreate
 from ._testing__create_employee import (
     TestingCreateEmployee,
@@ -427,6 +431,8 @@ __all__ = [
     "RoleBindingTerminateInput",
     "RoleBindingUpdateInput",
     "RoleRegistrationFilter",
+    "TestingCreateAssociation",
+    "TestingCreateAssociationAssociationCreate",
     "TestingCreateClass",
     "TestingCreateClassClassCreate",
     "TestingCreateEmployee",
