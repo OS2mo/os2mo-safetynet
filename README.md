@@ -104,7 +104,7 @@ docker compose run --rm safetynet pytest -m 'not integration_test'
 docker compose run --rm safetynet pytest -m 'integration_test' tests/integration/test_trigger.py
 ```
 
-See [AGENTS.md](AGENTS.md) for the full architecture and contributor guide.
+[AGENTS.md](AGENTS.md) holds working notes for AI agents.
 
 ## Licence
 
