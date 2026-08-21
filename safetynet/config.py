@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Magenta ApS <https://magenta.dk>
 # SPDX-License-Identifier: MPL-2.0
 from enum import Enum
-from typing import Any
 from uuid import UUID
 
 from fastramqpi.config import Settings as FastRAMQPISettings
@@ -44,7 +43,3 @@ class SafetyNetSettings(BaseSettings):
 
     class Config:
         env_nested_delimiter = "__"
-
-
-def get_settings(*args: Any, **kwargs: Any) -> SafetyNetSettings:
-    return SafetyNetSettings(*args, **kwargs)
