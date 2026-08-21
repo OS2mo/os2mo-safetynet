@@ -281,3 +281,25 @@ mutation _Testing_CreateManager(
     uuid
   }
 }
+
+mutation _Testing_CreateAssociation(
+  $user_key: String!
+  $person: UUID!
+  $org_unit: UUID!
+  $association_type: UUID!
+  $from_date: DateTime!
+  $trade_union: UUID
+) {
+  association_create(
+    input: {
+      user_key: $user_key
+      person: $person
+      org_unit: $org_unit
+      association_type: $association_type
+      trade_union: $trade_union
+      validity: { from: $from_date }
+    }
+  ) {
+    uuid
+  }
+}
