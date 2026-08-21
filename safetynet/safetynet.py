@@ -234,7 +234,9 @@ async def get_manager_eng_user_key_and_cpr(
             engagement=current_engagement,
         )
     else:
-        raise NotImplementedError()
+        # Unreachable: `SourceSystem` has no other members, but mypy needs the
+        # branch to see that the function always returns.
+        raise NotImplementedError()  # pragma: no cover
 
 
 async def process_engagement(
