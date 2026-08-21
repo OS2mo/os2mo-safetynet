@@ -23,7 +23,7 @@ variables:
   PYTHON_VERSION: "3.12"
 
   PRODUCT: os2mo
-  COMPONENT: sdtoolplus
+  COMPONENT: safetynet
 
 # Conditions
 #############
@@ -54,16 +54,17 @@ include:
       - /gitlab-ci-templates/common/rules.v1.yml
       - /gitlab-ci-templates/common/pre-commit.v1.yml
       - /gitlab-ci-templates/common/conventional-commits.v1.yml
-      - /gitlab-ci-templates/python/pytest.v1.yml
       - /gitlab-ci-templates/common/docker-build.v1.yml
       - /gitlab-ci-templates/common/docker-release.v1.yml
 #      - /gitlab-ci-templates/common/config-updater-salt.v1.yml
 #      - /gitlab-ci-templates/common/config-updater-flux.v1.yml
-
-# Unit tests (everything not marked as an integration test)
-Test:
-  variables:
-    PYTEST_ADDOPTS: "-m 'not integration_test'"
+  - project: labs/salt-automation
+    file:
+      - /gitlab-ci-templates/python/pytest.v1.yml
+    inputs:
+      pytest_addopts: "-m 'not integration_test'"
+    rules:
+      - <<: *if-merge-request
 
 # Integration tests (require a running OS2mo stack, provided by the template)
 Integration-test:
