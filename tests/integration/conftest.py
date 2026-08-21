@@ -64,6 +64,13 @@ MO_CLASSES: list[MOClass] = [
         user_key="fuldtid",
         name="Månedslønnet, fuldtid",
     ),
+    # Deliberately *not* in `allowed_sd_engagement_types`, so that resolving an
+    # SD manager engagement has to filter it out.
+    MOClass(
+        facet="engagement_type",
+        user_key="timelønnet",
+        name="Timelønnet",
+    ),
     MOClass(
         facet="engagement_job_function",
         user_key="Ninja",
@@ -119,20 +126,24 @@ async def class_uuids(graphql_client: GraphQLClient, root_org: UUID) -> dict[str
 
     MO is empty at this point (see `root_org`), so the classes the trees are
     built from must be created here rather than looked up from MO fixtures.
-    Returned keyed by facet, since `MO_CLASSES` holds one class per facet.
+    Returned keyed by class user_key, since a facet may hold more than one
+    class; each facet itself is only created once.
     """
+    facet_uuids: dict[str, UUID] = {}
     class_uuids = {}
-    for seed in MO_CLASSES:
-        facet = await graphql_client._testing__create_facet(
-            user_key=seed.facet, from_date=FROM_DATE
-        )
+    for mo_class in MO_CLASSES:
+        if mo_class.facet not in facet_uuids:
+            facet = await graphql_client._testing__create_facet(
+                user_key=mo_class.facet, from_date=FROM_DATE
+            )
+            facet_uuids[mo_class.facet] = facet.uuid
         cls = await graphql_client._testing__create_class(
-            user_key=seed.user_key,
-            name=seed.name,
-            facet_uuid=facet.uuid,
+            user_key=mo_class.user_key,
+            name=mo_class.name,
+            facet_uuid=facet_uuids[mo_class.facet],
             from_date=FROM_DATE,
         )
-        class_uuids[seed.facet] = cls.uuid
+        class_uuids[mo_class.user_key] = cls.uuid
     return class_uuids
 
 
@@ -146,7 +157,7 @@ async def _create_ou(
     ou = await gql._testing__create_org_unit(
         name=name,
         user_key=user_key,
-        org_unit_type=class_uuids["org_unit_type"],
+        org_unit_type=class_uuids["Enhed"],
         from_date=FROM_DATE,
         parent=parent,
     )
@@ -159,13 +170,14 @@ async def _create_engagement(
     user_key: str,
     person: UUID,
     org_unit: UUID,
+    engagement_type: UUID | None = None,
 ) -> UUID:
     engagement = await gql._testing__create_engagement(
         user_key=user_key,
         person=person,
         org_unit=org_unit,
-        engagement_type=class_uuids["engagement_type"],
-        job_function=class_uuids["engagement_job_function"],
+        engagement_type=engagement_type or class_uuids["fuldtid"],
+        job_function=class_uuids["Ninja"],
         from_date=FROM_DATE,
     )
     return engagement.uuid
@@ -183,9 +195,9 @@ async def _create_manager(
         user_key=user_key,
         person=person,
         org_unit=org_unit,
-        manager_type=class_uuids["manager_type"],
-        manager_level=class_uuids["manager_level"],
-        responsibility=[class_uuids["responsibility"]],
+        manager_type=class_uuids["leder"],
+        manager_level=class_uuids["afdelingsleder"],
+        responsibility=[class_uuids["personale"]],
         engagement=engagement,
         from_date=FROM_DATE,
     )
@@ -203,7 +215,7 @@ async def _create_association(
         user_key=user_key,
         person=person,
         org_unit=org_unit,
-        association_type=class_uuids["association_type"],
+        association_type=class_uuids["tr-naestformand"],
         trade_union=trade_union,
         from_date=FROM_DATE,
     )
@@ -294,7 +306,11 @@ async def sd_fallback_tree(
     """
     SD, manager role has no linked engagement (`engagement_response` is null), so
     the manager engagement is resolved by matching the manager's engagements
-    against the allowed SD engagement types (set to ["Ansat"] for this test).
+    against `allowed_sd_engagement_types` (left at its default, which contains
+    "fuldtid" but not "timelønnet").
+
+    The manager therefore has two engagements, only one of which is of an
+    allowed type, so picking the right one actually depends on the filter.
     """
     ou = await _create_ou(graphql_client, class_uuids, "SD fallback", "sn_sd_fallback")
     employee = await graphql_client._testing__create_employee(
@@ -305,6 +321,14 @@ async def sd_fallback_tree(
         given_name="Sd", surname="FbManager", cpr_number=CPRNumber("2512480008")
     )
     await _create_engagement(graphql_client, class_uuids, "XY-70002", manager.uuid, ou)
+    await _create_engagement(
+        graphql_client,
+        class_uuids,
+        "XY-70003",
+        manager.uuid,
+        ou,
+        engagement_type=class_uuids["timelønnet"],
+    )
     # No engagement link -> forces the allowed-engagement-type fallback.
     await _create_manager(graphql_client, class_uuids, "sd-fb-mgr", manager.uuid, ou)
     return ou
@@ -437,7 +461,7 @@ async def med_tree(graphql_client: GraphQLClient, class_uuids: dict[str, UUID]) 
         "med-root-ass",
         root_person.uuid,
         root,
-        trade_union=class_uuids["trade_union"],
+        trade_union=class_uuids["LO"],
     )
 
     child = await _create_ou(

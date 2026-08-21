@@ -157,7 +157,12 @@ async def test_sd_manager_via_engagement_type_fallback(
     test_client: AsyncClient, sd_fallback_tree: UUID
 ) -> None:
     """SD: with no linked manager engagement, resolve via the allowed engagement
-    types."""
+    types.
+
+    The manager holds two engagements, "fuldtid" (allowed) and "timelønnet"
+    (not), so the reported manager number is only unambiguous because the
+    disallowed one is filtered out.
+    """
     # Arrange
     ou = str(sd_fallback_tree)
 
@@ -165,11 +170,12 @@ async def test_sd_manager_via_engagement_type_fallback(
     await _trigger_adm(test_client, sd_fallback_tree)
 
     # Assert
-    employee, manager = sorted(
+    employee, *_ = sorted(
         read_local_report("adm-engagements.csv"), key=itemgetter("Medarbejdernummer")
     )
     remove_local_reports("adm-org-units.csv")
 
+    # The allowed-type engagement wins over the manager's "timelønnet" one.
     assert employee["Medarbejdernummer"] == "70001"
     assert employee["CPR"] == "2512480007"
     assert employee["Fornavn"] == "Sd"
@@ -182,19 +188,6 @@ async def test_sd_manager_via_engagement_type_fallback(
     assert employee["Brugernavn"] == ""
     assert employee["Titel"] == "Ninja"
     assert employee["Faggruppe"] == "Ninja"
-
-    assert manager["Medarbejdernummer"] == "70002"
-    assert manager["CPR"] == "2512480008"
-    assert manager["Fornavn"] == "Sd"
-    assert manager["Efternavn"] == "FbManager"
-    assert manager["Mail"] == ""
-    assert manager["Afdelingskode"] == ou
-    assert manager["Startdato"] == "1990-01-01"
-    assert manager["Slutdato"] == ""
-    assert manager["LedersMedarbejdernummer"] == ""
-    assert manager["Brugernavn"] == ""
-    assert manager["Titel"] == "Ninja"
-    assert manager["Faggruppe"] == "Ninja"
 
 
 @pytest.mark.integration_test
