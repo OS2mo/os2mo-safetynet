@@ -1,46 +1,18 @@
 # SPDX-FileCopyrightText: Magenta ApS <https://magenta.dk>
 # SPDX-License-Identifier: MPL-2.0
-import csv
-import unittest
-from io import BytesIO
-from io import StringIO
 from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
 from more_itertools import one
 
-from safetynet.config import SafetyNetSettings
-from safetynet.safetynet import sftp_client
+from tests.integration.reports import download_report
 
 # End-to-end test against a real SFTP server (the `sftp` service in
 # docker-compose.yml): generate a report, upload it via SFTP, then download it
 # again and verify its contents. See the repo AGENTS.md for how to run.
 
 
-def _download_report(name: str) -> list[dict[str, str]]:
-    """Download a report from the SFTP server and parse it with DictReader.
-
-    Uses the same SFTP settings the app uploads with. The reports use ``||`` as
-    delimiter; csv only supports single-character delimiters, so collapse ``||``
-    to ``|`` before parsing.
-    """
-    sftp = SafetyNetSettings().safetynet_sftp
-    assert sftp is not None, "SFTP must be configured for the e2e test"
-
-    buffer = BytesIO()
-    with sftp_client(
-        sftp.hostname, sftp.port, sftp.username, sftp.password.get_secret_value()
-    ) as client:
-        client.getfo(name, buffer)
-        # Clean up so the assertion always reflects the current run.
-        client.remove(name)
-
-    content = buffer.getvalue().decode("utf-8").replace("||", "|")
-    return list(csv.DictReader(StringIO(content), delimiter="|"))
-
-
-@unittest.skip("skip")
 @pytest.mark.integration_test
 async def test_e2e_generate_upload_and_download_via_sftp(
     test_client: AsyncClient, opus_tree: UUID
@@ -57,7 +29,7 @@ async def test_e2e_generate_upload_and_download_via_sftp(
     assert response.status_code == 200, response.text
 
     # Assert: the uploaded engagement report can be downloaded and matches.
-    row = one(_download_report("adm-engagements.csv"))
+    row = one(download_report("adm-engagements.csv"))
     assert row["Medarbejdernummer"] == "12345"
     assert row["CPR"] == "2512480001"
     assert row["Fornavn"] == "Opus"

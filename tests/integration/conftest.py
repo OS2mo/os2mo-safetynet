@@ -84,6 +84,20 @@ MO_CLASSES: list[MOClass] = [
         user_key="personale",
         name="Personale",
     ),
+    # The MED association role. Its *name* is what the report splits into one row
+    # per role, so it is deliberately a composite role (Redmine case #63407).
+    MOClass(
+        facet="association_type",
+        user_key="tr-naestformand",
+        name="TR, næstformand",
+    ),
+    # The association's `trade_union`, which MO exposes as `dynamic_class` and
+    # the MED association report emits as Hovedorganisation.
+    MOClass(
+        facet="trade_union",
+        user_key="LO",
+        name="LO",
+    ),
 ]
 
 
@@ -175,6 +189,25 @@ async def _create_manager(
         engagement=engagement,
         from_date=FROM_DATE,
     )
+
+
+async def _create_association(
+    gql: GraphQLClient,
+    class_uuids: dict[str, UUID],
+    user_key: str,
+    person: UUID,
+    org_unit: UUID,
+    trade_union: UUID | None = None,
+) -> UUID:
+    association = await gql._testing__create_association(
+        user_key=user_key,
+        person=person,
+        org_unit=org_unit,
+        association_type=class_uuids["association_type"],
+        trade_union=trade_union,
+        from_date=FROM_DATE,
+    )
+    return association.uuid
 
 
 @pytest.fixture
@@ -303,3 +336,118 @@ async def sd_coupling_tree(
         graphql_client, class_uuids, "sd-cpl-mgr", manager.uuid, ou, engagement=linked
     )
     return ou
+
+
+@pytest.fixture
+async def opus_unmanaged_tree(
+    graphql_client: GraphQLClient, class_uuids: dict[str, UUID]
+) -> UUID:
+    """
+    OPUS, the unit has no manager at all (and none to inherit from), so the
+    report leaves the manager engagement number empty.
+    """
+    ou = await _create_ou(
+        graphql_client, class_uuids, "OPUS unmanaged", "sn_opus_unmgd"
+    )
+    employee = await graphql_client._testing__create_employee(
+        given_name="Opus", surname="Unmanaged", cpr_number=CPRNumber("2512480011")
+    )
+    await _create_engagement(graphql_client, class_uuids, "12345", employee.uuid, ou)
+    return ou
+
+
+@pytest.fixture
+async def opus_nested_tree(
+    graphql_client: GraphQLClient, class_uuids: dict[str, UUID]
+) -> UUID:
+    """
+    OPUS, a parent unit with an engagement of its own and a child unit that also
+    has one. Returns the *parent*, so processing has to recurse into the child.
+    """
+    parent = await _create_ou(
+        graphql_client, class_uuids, "OPUS nested parent", "sn_opus_nested_parent"
+    )
+    parent_employee = await graphql_client._testing__create_employee(
+        given_name="Opus", surname="ParentEmployee", cpr_number=CPRNumber("2512480012")
+    )
+    await _create_engagement(
+        graphql_client, class_uuids, "11111", parent_employee.uuid, parent
+    )
+    manager = await graphql_client._testing__create_employee(
+        given_name="Opus", surname="NestedManager", cpr_number=CPRNumber("2512480013")
+    )
+    await _create_manager(graphql_client, class_uuids, "54321", manager.uuid, parent)
+
+    child = await _create_ou(
+        graphql_client,
+        class_uuids,
+        "OPUS nested child",
+        "sn_opus_nested_child",
+        parent=parent,
+    )
+    child_employee = await graphql_client._testing__create_employee(
+        given_name="Opus", surname="ChildEmployee", cpr_number=CPRNumber("2512480014")
+    )
+    await _create_engagement(
+        graphql_client, class_uuids, "22222", child_employee.uuid, child
+    )
+    return parent
+
+
+@pytest.fixture
+async def sd_ambiguous_tree(
+    graphql_client: GraphQLClient, class_uuids: dict[str, UUID]
+) -> UUID:
+    """
+    SD, the manager has two engagements of an allowed type and the manager role
+    has *no* linked engagement, so the fallback cannot pick one and the manager
+    engagement number is left empty.
+    """
+    ou = await _create_ou(
+        graphql_client, class_uuids, "SD ambiguous", "sn_sd_ambiguous"
+    )
+    employee = await graphql_client._testing__create_employee(
+        given_name="Sd", surname="AmbEmployee", cpr_number=CPRNumber("2512480015")
+    )
+    await _create_engagement(graphql_client, class_uuids, "XY-90001", employee.uuid, ou)
+    manager = await graphql_client._testing__create_employee(
+        given_name="Sd", surname="AmbManager", cpr_number=CPRNumber("2512480016")
+    )
+    await _create_engagement(graphql_client, class_uuids, "XY-90002", manager.uuid, ou)
+    await _create_engagement(graphql_client, class_uuids, "XY-90003", manager.uuid, ou)
+    # No engagement link and two candidates -> ambiguous, so no manager number.
+    await _create_manager(graphql_client, class_uuids, "sd-amb-mgr", manager.uuid, ou)
+    return ou
+
+
+@pytest.fixture
+async def med_tree(graphql_client: GraphQLClient, class_uuids: dict[str, UUID]) -> UUID:
+    """
+    A MED tree: a root unit whose association carries a trade union (reported as
+    Hovedorganisation) and a child unit whose association does not. Both use the
+    composite "TR, næstformand" role, so each association yields two rows.
+    """
+    root = await _create_ou(graphql_client, class_uuids, "SafetyNet MED", "sn_med_root")
+    root_person = await graphql_client._testing__create_employee(
+        given_name="Med", surname="Rep", cpr_number=CPRNumber("2512480020")
+    )
+    await _create_association(
+        graphql_client,
+        class_uuids,
+        "med-root-ass",
+        root_person.uuid,
+        root,
+        trade_union=class_uuids["trade_union"],
+    )
+
+    child = await _create_ou(
+        graphql_client, class_uuids, "MED child", "sn_med_child", parent=root
+    )
+    child_person = await graphql_client._testing__create_employee(
+        given_name="Med", surname="ChildRep", cpr_number=CPRNumber("2512480021")
+    )
+    # No trade union -> Hovedorganisation is empty.
+    await _create_association(
+        graphql_client, class_uuids, "med-child-ass", child_person.uuid, child
+    )
+    return root
