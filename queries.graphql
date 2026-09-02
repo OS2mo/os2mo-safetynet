@@ -241,6 +241,7 @@ mutation _Testing_CreateEngagement(
   $engagement_type: UUID!
   $job_function: UUID!
   $from_date: DateTime!
+  $to_date: DateTime
 ) {
   engagement_create(
     input: {
@@ -249,7 +250,7 @@ mutation _Testing_CreateEngagement(
       org_unit: $org_unit
       engagement_type: $engagement_type
       job_function: $job_function
-      validity: { from: $from_date }
+      validity: { from: $from_date, to: $to_date }
     }
   ) {
     uuid
@@ -288,6 +289,7 @@ mutation _Testing_CreateAssociation(
   $org_unit: UUID!
   $association_type: UUID!
   $from_date: DateTime!
+  $to_date: DateTime
   $trade_union: UUID
 ) {
   association_create(
@@ -297,7 +299,7 @@ mutation _Testing_CreateAssociation(
       org_unit: $org_unit
       association_type: $association_type
       trade_union: $trade_union
-      validity: { from: $from_date }
+      validity: { from: $from_date, to: $to_date }
     }
   ) {
     uuid
