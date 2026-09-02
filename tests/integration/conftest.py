@@ -17,6 +17,12 @@ from safetynet.main import create_app
 from safetynet.types import CPRNumber
 
 FROM_DATE = datetime.datetime(1990, 1, 1, tzinfo=ZoneInfo("Europe/Copenhagen"))
+# An end date for the objects that need one. It has to be in the future, or the
+# object would no longer be current and would drop out of the reports entirely.
+# MO treats `validity.to` as *exclusive* from GraphQL v29 on, so the last day an
+# object with this end date is actually valid is TO_DATE_INCLUSIVE.
+TO_DATE = datetime.datetime(2099, 12, 31, tzinfo=ZoneInfo("Europe/Copenhagen"))
+TO_DATE_INCLUSIVE = "2099-12-30"
 
 
 @pytest.fixture
@@ -171,6 +177,7 @@ async def _create_engagement(
     person: UUID,
     org_unit: UUID,
     engagement_type: UUID | None = None,
+    to_date: datetime.datetime | None = None,
 ) -> UUID:
     engagement = await gql._testing__create_engagement(
         user_key=user_key,
@@ -179,6 +186,7 @@ async def _create_engagement(
         engagement_type=engagement_type or class_uuids["fuldtid"],
         job_function=class_uuids["Ninja"],
         from_date=FROM_DATE,
+        to_date=to_date,
     )
     return engagement.uuid
 
@@ -210,6 +218,7 @@ async def _create_association(
     person: UUID,
     org_unit: UUID,
     trade_union: UUID | None = None,
+    to_date: datetime.datetime | None = None,
 ) -> UUID:
     association = await gql._testing__create_association(
         user_key=user_key,
@@ -218,6 +227,7 @@ async def _create_association(
         association_type=class_uuids["tr-naestformand"],
         trade_union=trade_union,
         from_date=FROM_DATE,
+        to_date=to_date,
     )
     return association.uuid
 
@@ -470,8 +480,36 @@ async def med_tree(graphql_client: GraphQLClient, class_uuids: dict[str, UUID]) 
     child_person = await graphql_client._testing__create_employee(
         given_name="Med", surname="ChildRep", cpr_number=CPRNumber("2512480021")
     )
-    # No trade union -> Hovedorganisation is empty.
+    # No trade union -> Hovedorganisation is empty. It also has an end date, so
+    # the report has to emit a Slutdato for it.
     await _create_association(
-        graphql_client, class_uuids, "med-child-ass", child_person.uuid, child
+        graphql_client,
+        class_uuids,
+        "med-child-ass",
+        child_person.uuid,
+        child,
+        to_date=TO_DATE,
     )
     return root
+
+
+@pytest.fixture
+async def opus_closed_tree(
+    graphql_client: GraphQLClient, class_uuids: dict[str, UUID]
+) -> UUID:
+    """
+    OPUS, the employee's engagement has an end date, so the report has to emit a
+    Slutdato rather than leaving it blank.
+    """
+    ou = await _create_ou(graphql_client, class_uuids, "OPUS closed", "sn_opus_closed")
+    employee = await graphql_client._testing__create_employee(
+        given_name="Opus", surname="Leaver", cpr_number=CPRNumber("2512480017")
+    )
+    await _create_engagement(
+        graphql_client, class_uuids, "12345", employee.uuid, ou, to_date=TO_DATE
+    )
+    manager = await graphql_client._testing__create_employee(
+        given_name="Opus", surname="ClosedManager", cpr_number=CPRNumber("2512480018")
+    )
+    await _create_manager(graphql_client, class_uuids, "54321", manager.uuid, ou)
+    return ou

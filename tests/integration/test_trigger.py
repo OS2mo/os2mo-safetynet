@@ -8,6 +8,7 @@ import pytest
 from httpx import AsyncClient
 from more_itertools import one
 
+from tests.integration.conftest import TO_DATE_INCLUSIVE
 from tests.integration.reports import read_local_report
 from tests.integration.reports import remove_local_reports
 
@@ -405,3 +406,24 @@ async def test_upload_is_skipped_when_sftp_is_not_configured(
     # Nothing was written locally either, since this was not a skip_upload run.
     assert not os.path.exists("/tmp/adm-engagements.csv")
     assert not os.path.exists("/tmp/adm-org-units.csv")
+
+
+@pytest.mark.integration_test
+async def test_engagement_end_date_is_the_last_valid_day(
+    test_client: AsyncClient, opus_closed_tree: UUID
+) -> None:
+    """Slutdato is the last day the engagement is valid.
+
+    MO returns `validity.to` as an exclusive end from GraphQL v29 on, so the raw
+    value is a day later than the report must show.
+    """
+    # Act
+    await _trigger_adm(test_client, opus_closed_tree)
+
+    # Assert
+    row = one(read_local_report("adm-engagements.csv"))
+    remove_local_reports("adm-org-units.csv")
+    assert row["Medarbejdernummer"] == "12345"
+    assert row["CPR"] == "2512480017"
+    assert row["Startdato"] == "1990-01-01"
+    assert row["Slutdato"] == TO_DATE_INCLUSIVE
