@@ -46,6 +46,21 @@ Query parameters:
 - `skip_upload` — write CSVs to `/tmp/*.csv` instead of uploading via SFTP.
 - `only_adm_org` — only generate the two ADM reports.
 
+The uploaded reports can be fetched back for inspection:
+
+```
+POST /download
+```
+
+Query parameters:
+
+- `only_adm_org` — only download the two ADM reports.
+
+They are written to `/tmp` under a `downloaded-` prefix (e.g.
+`/tmp/downloaded-adm-engagements.csv`), so they cannot overwrite the reports a
+`skip_upload` run writes there. The response maps each report name to its local
+path. Requires SFTP to be configured.
+
 ### Local development
 
 Requires a separately-running OS2mo stack (see https://github.com/OS2mo). Start
