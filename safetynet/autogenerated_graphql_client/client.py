@@ -360,11 +360,12 @@ class GraphQLClient(AsyncBaseClient):
         engagement_type: UUID,
         job_function: UUID,
         from_date: datetime,
+        to_date: Union[Optional[datetime], UnsetType] = UNSET,
     ) -> TestingCreateEngagementEngagementCreate:
         query = gql("""
-            mutation _Testing_CreateEngagement($user_key: String!, $person: UUID!, $org_unit: UUID!, $engagement_type: UUID!, $job_function: UUID!, $from_date: DateTime!) {
+            mutation _Testing_CreateEngagement($user_key: String!, $person: UUID!, $org_unit: UUID!, $engagement_type: UUID!, $job_function: UUID!, $from_date: DateTime!, $to_date: DateTime) {
               engagement_create(
-                input: {user_key: $user_key, person: $person, org_unit: $org_unit, engagement_type: $engagement_type, job_function: $job_function, validity: {from: $from_date}}
+                input: {user_key: $user_key, person: $person, org_unit: $org_unit, engagement_type: $engagement_type, job_function: $job_function, validity: {from: $from_date, to: $to_date}}
               ) {
                 uuid
               }
@@ -377,6 +378,7 @@ class GraphQLClient(AsyncBaseClient):
             "engagement_type": engagement_type,
             "job_function": job_function,
             "from_date": from_date,
+            "to_date": to_date,
         }
         response = await self.execute(query=query, variables=variables)
         data = self.get_data(response)
@@ -423,12 +425,13 @@ class GraphQLClient(AsyncBaseClient):
         org_unit: UUID,
         association_type: UUID,
         from_date: datetime,
+        to_date: Union[Optional[datetime], UnsetType] = UNSET,
         trade_union: Union[Optional[UUID], UnsetType] = UNSET,
     ) -> TestingCreateAssociationAssociationCreate:
         query = gql("""
-            mutation _Testing_CreateAssociation($user_key: String!, $person: UUID!, $org_unit: UUID!, $association_type: UUID!, $from_date: DateTime!, $trade_union: UUID) {
+            mutation _Testing_CreateAssociation($user_key: String!, $person: UUID!, $org_unit: UUID!, $association_type: UUID!, $from_date: DateTime!, $to_date: DateTime, $trade_union: UUID) {
               association_create(
-                input: {user_key: $user_key, person: $person, org_unit: $org_unit, association_type: $association_type, trade_union: $trade_union, validity: {from: $from_date}}
+                input: {user_key: $user_key, person: $person, org_unit: $org_unit, association_type: $association_type, trade_union: $trade_union, validity: {from: $from_date, to: $to_date}}
               ) {
                 uuid
               }
@@ -440,6 +443,7 @@ class GraphQLClient(AsyncBaseClient):
             "org_unit": org_unit,
             "association_type": association_type,
             "from_date": from_date,
+            "to_date": to_date,
             "trade_union": trade_union,
         }
         response = await self.execute(query=query, variables=variables)

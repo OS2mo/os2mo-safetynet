@@ -5,6 +5,7 @@ from uuid import UUID
 import pytest
 from httpx import AsyncClient
 
+from tests.integration.conftest import TO_DATE_INCLUSIVE
 from tests.integration.reports import download_report
 from tests.integration.reports import read_local_report
 from tests.integration.reports import remove_local_reports
@@ -72,9 +73,13 @@ async def test_med_association_and_org_unit_reports(
     assert child_tr["CPR"] == "2512480021"
     assert child_tr["Hverv"] == "TR"
     assert child_tr["Hovedorganisation"] == ""
+    # The child association has an end date; MO returns `validity.to` as an
+    # exclusive end, so the report must show the last valid day.
+    assert child_tr["Slutdato"] == TO_DATE_INCLUSIVE
     assert child_naestformand["CPR"] == "2512480021"
     assert child_naestformand["Hverv"] == "næstformand"
     assert child_naestformand["Hovedorganisation"] == ""
+    assert child_naestformand["Slutdato"] == TO_DATE_INCLUSIVE
 
     # Assert: the MED org unit report covers the whole tree, root first.
     ou_rows = download_report("med-org-units.csv")

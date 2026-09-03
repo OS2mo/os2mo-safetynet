@@ -106,13 +106,29 @@ class MedOuRow(BaseModel):
     parent: UUID | None
 
 
-def _format_date(value: datetime.datetime | None) -> str:
+def _format_date(value: datetime.datetime) -> str:
     """
-    Format a MO validity datetime as a `YYYY-MM-DD` string (empty for None).
+    Format a MO validity datetime as a `YYYY-MM-DD` string.
+    """
+    return value.strftime(DATE_FORMAT)
+
+
+def _format_end_date(value: datetime.datetime | None) -> str:
+    """
+    Format a MO validity *end* as the last day the object is valid.
+
+    MO stores validities as half-open intervals, and from GraphQL v29 it returns
+    `validity.to` unadjusted, i.e. as midnight of the day *after* the last valid
+    day. Up to v28 it subtracted a minute before truncating to a date, so the
+    same engagement read at v22 and at v30 differs by a day. SafetyNet expects
+    the inclusive day, so subtract it back off here.
+
+    Done in date arithmetic rather than on the datetime, so that a DST boundary
+    cannot shift the result.
     """
     if value is None:
         return ""
-    return value.strftime(DATE_FORMAT)
+    return (value.date() - datetime.timedelta(days=1)).strftime(DATE_FORMAT)
 
 
 def _remove_sd_user_key_prefix(user_key: str) -> str:
@@ -264,7 +280,7 @@ async def process_engagement(
     obj = one(engagement.objects)
 
     eng_start = _format_date(first(obj.validities).validity.from_)
-    eng_end = _format_date(last(obj.validities).validity.to)
+    eng_end = _format_end_date(last(obj.validities).validity.to)
 
     current = obj.current
     assert current is not None
@@ -384,7 +400,7 @@ async def process_association(
     obj = one(association.objects)
 
     ass_start = _format_date(first(obj.validities).validity.from_)
-    ass_end = _format_date(last(obj.validities).validity.to)
+    ass_end = _format_end_date(last(obj.validities).validity.to)
 
     current = obj.current
     assert current is not None
