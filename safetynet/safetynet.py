@@ -49,6 +49,20 @@ from safetynet.config import SourceSystem
 
 DATE_FORMAT = "%Y-%m-%d"
 
+# The report filenames, as uploaded to the SafetyNet SFTP server.
+ADM_ENGAGEMENTS_CSV = "adm-engagements.csv"
+ADM_ORG_UNITS_CSV = "adm-org-units.csv"
+MED_ASSOCIATIONS_CSV = "med-associations.csv"
+MED_ORG_UNITS_CSV = "med-org-units.csv"
+
+ADM_REPORTS = (ADM_ENGAGEMENTS_CSV, ADM_ORG_UNITS_CSV)
+MED_REPORTS = (MED_ASSOCIATIONS_CSV, MED_ORG_UNITS_CSV)
+
+LOCAL_REPORT_DIR = "/tmp"
+# Reports downloaded back from the SFTP server are prefixed, so that they cannot
+# overwrite the ones a `skip_upload` run writes under their plain names.
+DOWNLOAD_PREFIX = "downloaded-"
+
 logger = structlog.get_logger()
 
 
@@ -679,6 +693,61 @@ async def upload_csv(
     await run_in_threadpool(_upload_csv_sync, safetynet_sftp, remote_path, csv_lines)
 
 
+def _local_report_path(name: str) -> str:
+    return f"{LOCAL_REPORT_DIR}/{name}"
+
+
+def _download_reports_sync(
+    safetynet_sftp: SafetyNetSFTP,
+    reports: list[str],
+) -> dict[str, str]:
+    # One connection for all of the reports, rather than one per file.
+    downloaded = {}
+    with sftp_client(
+        safetynet_sftp.hostname,
+        safetynet_sftp.port,
+        safetynet_sftp.username,
+        safetynet_sftp.password.get_secret_value(),
+    ) as client:
+        for report in reports:
+            local_path = _local_report_path(f"{DOWNLOAD_PREFIX}{report}")
+            client.get(report, local_path)
+            downloaded[report] = local_path
+    return downloaded
+
+
+async def download_reports(
+    safetynet_sftp: SafetyNetSFTP | None,
+    only_adm_org: bool,
+) -> dict[str, str]:
+    """
+    Download the previously uploaded reports from the SFTP server.
+
+    Args:
+        safetynet_sftp: the SFTP server settings
+        only_adm_org: only download the two ADM reports
+
+    Returns:
+        A mapping of report name to the local path it was written to.
+    """
+    logger.info("Downloading Safetynet reports", only_adm_org=only_adm_org)
+
+    if safetynet_sftp is None:
+        raise ValueError("SFTP server settings are required to download reports")
+
+    reports = list(ADM_REPORTS)
+    if not only_adm_org:
+        reports += MED_REPORTS
+
+    # paramiko is blocking, so run it off the event loop.
+    downloaded = await run_in_threadpool(
+        _download_reports_sync, safetynet_sftp, reports
+    )
+
+    logger.info("Finished downloading Safetynet reports", reports=downloaded)
+    return downloaded
+
+
 async def generate_reports(
     gql_client: GraphQLClient,
     settings: SafetyNetSettings,
@@ -701,9 +770,9 @@ async def generate_reports(
     )
     csv_lines = adm_eng_rows_to_csv_lines(adm_eng_rows, settings.include_manager_cpr)
     if skip_upload:
-        write_csv("/tmp/adm-engagements.csv", csv_lines)
+        write_csv(_local_report_path(ADM_ENGAGEMENTS_CSV), csv_lines)
     else:
-        await upload_csv(settings.safetynet_sftp, "adm-engagements.csv", csv_lines)
+        await upload_csv(settings.safetynet_sftp, ADM_ENGAGEMENTS_CSV, csv_lines)
 
     med_ass_rows: list[MedAssRow] = []
     med_ou_rows: list[MedOuRow] = []
@@ -716,26 +785,26 @@ async def generate_reports(
         )
         csv_lines = med_ass_rows_to_csv_lines(med_ass_rows)
         if skip_upload:
-            write_csv("/tmp/med-associations.csv", csv_lines)
+            write_csv(_local_report_path(MED_ASSOCIATIONS_CSV), csv_lines)
         else:
-            await upload_csv(settings.safetynet_sftp, "med-associations.csv", csv_lines)
+            await upload_csv(settings.safetynet_sftp, MED_ASSOCIATIONS_CSV, csv_lines)
 
     # Adm OU report
     logger.info("Generating adm OU report")
     csv_lines = adm_ou_rows_to_csv_lines(adm_ou_rows)
     if skip_upload:
-        write_csv("/tmp/adm-org-units.csv", csv_lines)
+        write_csv(_local_report_path(ADM_ORG_UNITS_CSV), csv_lines)
     else:
-        await upload_csv(settings.safetynet_sftp, "adm-org-units.csv", csv_lines)
+        await upload_csv(settings.safetynet_sftp, ADM_ORG_UNITS_CSV, csv_lines)
 
     if not only_adm_org:
         # Med OU report
         logger.info("Generating MED OU report")
         csv_lines = med_ou_rows_to_csv_lines(med_ou_rows)
         if skip_upload:
-            write_csv("/tmp/med-org-units.csv", csv_lines)
+            write_csv(_local_report_path(MED_ORG_UNITS_CSV), csv_lines)
         else:
-            await upload_csv(settings.safetynet_sftp, "med-org-units.csv", csv_lines)
+            await upload_csv(settings.safetynet_sftp, MED_ORG_UNITS_CSV, csv_lines)
 
     logger.info("Finished Safetynet report generation")
 
