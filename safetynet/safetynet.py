@@ -641,6 +641,9 @@ def _ssh_client(
     ssh_client = SSHClient()
     try:
         ssh_client.set_missing_host_key_policy(AutoAddPolicy())
+        logger.debug(
+            "Connecting to SFTP server", hostname=hostname, port=port, username=username
+        )
         ssh_client.connect(
             hostname=hostname,
             port=port,
@@ -648,8 +651,10 @@ def _ssh_client(
             password=password,
             look_for_keys=False,
         )
+        logger.debug("Connected to SFTP server", hostname=hostname)
         yield ssh_client
     finally:
+        logger.debug("Closing SSH connection", hostname=hostname)
         ssh_client.close()
 
 
@@ -658,10 +663,12 @@ def sftp_client(
     hostname: str, port: int, username: str, password: str
 ) -> Iterator[SFTPClient]:
     with _ssh_client(hostname, port, username, password) as ssh_client:
+        logger.debug("Opening SFTP session")
         sftp_client_: SFTPClient = ssh_client.open_sftp()
         try:
             yield sftp_client_
         finally:
+            logger.debug("Closing SFTP session")
             sftp_client_.close()
 
 
@@ -672,6 +679,12 @@ def _upload_csv_sync(
 ) -> None:
     # SFTP transfers bytes; encode as UTF-8 so the Danish column headers survive.
     upload_bytes = "".join(csv_lines).encode("utf-8")
+    logger.info(
+        "Uploading report",
+        remote_path=remote_path,
+        bytes=len(upload_bytes),
+        hostname=safetynet_sftp.hostname,
+    )
     with sftp_client(
         safetynet_sftp.hostname,
         safetynet_sftp.port,
@@ -679,6 +692,9 @@ def _upload_csv_sync(
         safetynet_sftp.password.get_secret_value(),
     ) as client:
         client.putfo(BytesIO(upload_bytes), remote_path, confirm=False)
+    logger.info(
+        "Finished uploading report", remote_path=remote_path, bytes=len(upload_bytes)
+    )
 
 
 async def upload_csv(
@@ -711,6 +727,9 @@ def _download_reports_sync(
     ) as client:
         for report in reports:
             local_path = _local_report_path(f"{DOWNLOAD_PREFIX}{report}")
+            logger.debug(
+                "Downloading report", remote_path=report, local_path=local_path
+            )
             client.get(report, local_path)
             downloaded[report] = local_path
     return downloaded
