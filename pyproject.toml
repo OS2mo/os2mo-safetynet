@@ -27,14 +27,14 @@ tenacity = "^8"
 ramodels = "^39"
 graphql-core = "^3"
 async-lru = "^2.0.5"
-paramiko = "^2.8.1"
+paramiko = "^5"
 
 [tool.poetry.group.pre-commit.dependencies]
 pre-commit = "^3"
 ruff = "^0.9"
 deptry = "^0.23"
 mypy = "^1"
-types-paramiko = "^2.8.1"
+types-paramiko = "^5"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^8.4"
